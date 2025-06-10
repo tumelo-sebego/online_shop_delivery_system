@@ -7,6 +7,10 @@ const orderRoutes = require("./order.routes");
 const driverRoutes = require("./driver.routes");
 const customerRoutes = require("./customer.routes");
 const analyticsRoutes = require("./analytics.routes");
+const { authMiddleware, requireRole } = require("../../middleware/auth");
+
+router.use(authMiddleware);
+router.use(requireRole(["admin"]));
 
 router.use("/auth", authRoutes);
 router.use("/dashboard", dashboardRoutes);
