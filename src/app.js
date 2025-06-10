@@ -1,11 +1,15 @@
 const express = require("express");
 const cors = require("cors");
+const connectDB = require("./config/database");
 const authRoutes = require("./routes/common/auth.routes");
 const adminRoutes = require("./routes/admin");
 const customerRoutes = require("./routes/customer");
 const driverRoutes = require("./routes/driver");
 
 const app = express();
+
+// Connect to MongoDB
+connectDB();
 
 // Middleware
 app.use(cors());
