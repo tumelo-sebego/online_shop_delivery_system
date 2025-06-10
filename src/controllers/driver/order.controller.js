@@ -3,15 +3,15 @@ const SocketService = require("../../services/socket.service");
 const getAvailableOrders = async (req, res) => {
   try {
     const orders = await Order.find({
-      status: 'confirmed',
-      driver_id: null
+      status: "confirmed",
+      driver_id: null,
     })
-    .populate('customer_id', 'first_name last_name')
-    .populate({
-      path: 'items.product_id',
-      select: 'name'
-    })
-    .select('delivery_address total_amount order_date');
+      .populate("customer_id", "first_name last_name")
+      .populate({
+        path: "items.product_id",
+        select: "name",
+      })
+      .select("delivery_address total_amount order_date");
 
     res.status(200).json({ orders });
   } catch (error) {
@@ -22,9 +22,35 @@ const getAvailableOrders = async (req, res) => {
 const acceptOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    // TODO: Implement order acceptance logic
+    const driverId = req.user.id; // From auth middleware
+
+    const order = await Order.findOneAndUpdate(
+      {
+        _id: id,
+        status: "confirmed",
+        driver_id: null,
+      },
+      {
+        driver_id: driverId,
+        status: "assigned",
+      },
+      { new: true },
+    );
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not available" });
+    }
+
+    // Notify customer through WebSocket
+    SocketService.emitOrderUpdate(id, {
+      type: "driver_assigned",
+      driverId,
+      orderId: id,
+    });
+
     res.status(200).json({
-      message: `Order ${id} accepted successfully`,
+      message: "Order accepted successfully",
+      order,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
