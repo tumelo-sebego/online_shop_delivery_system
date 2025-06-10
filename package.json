@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "build": "npm install"
+    "build": "npm install && mkdir -p functions"
   },
   "dependencies": {
     "cors": "^2.8.5",
