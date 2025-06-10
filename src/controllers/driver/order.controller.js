@@ -102,13 +102,21 @@ const updateLocation = async (req, res) => {
   try {
     const { id } = req.params;
     const { latitude, longitude } = req.body;
+    const driverId = req.user.id;
 
-    // Emit location update through WebSocket
+    await Order.findOneAndUpdate(
+      { _id: id, driver_id: driverId },
+      {
+        "driver_location.latitude": latitude,
+        "driver_location.longitude": longitude,
+        "driver_location.updated_at": new Date(),
+      },
+    );
+
+    // Emit through WebSocket as backup
     SocketService.emitDriverLocation(id, { latitude, longitude });
 
-    res.status(200).json({
-      message: `Location updated for order ${id}`,
-    });
+    res.status(200).json({ message: "Location updated" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
