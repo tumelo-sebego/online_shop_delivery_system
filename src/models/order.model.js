@@ -65,6 +65,21 @@ const orderSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    driver_location: {
+      latitude: Number,
+      longitude: Number,
+      updated_at: Date,
+    },
+    delivery_completed_at: Date,
+    offline_updates: [
+      {
+        type: {
+          latitude: Number,
+          longitude: Number,
+          timestamp: Date,
+        },
+      },
+    ],
   },
   {
     timestamps: {
