@@ -2,10 +2,18 @@ const SocketService = require("../../services/socket.service");
 
 const getAvailableOrders = async (req, res) => {
   try {
-    // TODO: Implement available orders logic
-    res.status(200).json({
-      orders: [],
-    });
+    const orders = await Order.find({
+      status: 'confirmed',
+      driver_id: null
+    })
+    .populate('customer_id', 'first_name last_name')
+    .populate({
+      path: 'items.product_id',
+      select: 'name'
+    })
+    .select('delivery_address total_amount order_date');
+
+    res.status(200).json({ orders });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
