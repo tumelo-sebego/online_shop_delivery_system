@@ -3,6 +3,7 @@ const cors = require('cors');
 const authRoutes = require('./routes/common/auth.routes');
 const adminRoutes = require('./routes/admin');
 const customerRoutes = require('./routes/customer');
+const driverRoutes = require('./routes/driver');
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/customer', customerRoutes);
+app.use('/api/driver', driverRoutes);
 
 const PORT = process.env.PORT || 3000;
 
