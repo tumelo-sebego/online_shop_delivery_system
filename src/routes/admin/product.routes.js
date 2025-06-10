@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { 
-    getAllProducts, 
-    addProduct, 
-    updateProduct, 
-    deleteProduct 
+    getAllProducts,
+    addProduct,
+    updateProduct,
+    deleteProduct
 } = require('../../controllers/admin/product.controller');
 
 router.get('/', getAllProducts);
