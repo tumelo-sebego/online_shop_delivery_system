@@ -1,4 +1,22 @@
+const Order = require("../../models/order.model");
+const User = require("../../models/user.model");
 const SocketService = require("../../services/socket.service");
+const { isOnline } = require("../../utils/networkCheck");
+const { addToQueue, processQueue } = require("../../utils/locationQueue");
+
+// Status transition validation
+const STATUS_TRANSITIONS = {
+  confirmed: ["assigned"],
+  assigned: ["picked_up"],
+  picked_up: ["delivered", "cancelled"],
+  delivered: [],
+  cancelled: [],
+};
+
+const validateStatusTransition = (currentStatus, newStatus) => {
+  const allowedTransitions = STATUS_TRANSITIONS[currentStatus] || [];
+  return allowedTransitions.includes(newStatus);
+};
 
 const getAvailableOrders = async (req, res) => {
   try {
@@ -57,37 +75,50 @@ const acceptOrder = async (req, res) => {
   }
 };
 
+// Update the updateOrderStatus function
 const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
     const driverId = req.user.id;
 
-    // Validate status transition
-    const validStatusUpdates = {
-      assigned: ["picked_up"],
-      picked_up: ["delivered"],
-    };
-
     const order = await Order.findOne({ _id: id, driver_id: driverId });
-
     if (!order) {
       return res.status(404).json({ error: "Order not found" });
     }
 
-    if (!validStatusUpdates[order.status]?.includes(status)) {
-      return res.status(400).json({ error: "Invalid status transition" });
+    if (!validateStatusTransition(order.status, status)) {
+      return res.status(400).json({
+        error: `Invalid status transition from ${order.status} to ${status}`,
+      });
     }
 
     order.status = status;
+
+    // Handle order completion
+    if (status === "delivered") {
+      order.delivery_completed_at = new Date();
+      await User.findByIdAndUpdate(driverId, { is_available: true });
+
+      // Trigger completion confirmation
+      SocketService.emitOrderUpdate(id, {
+        type: "order_completed",
+        orderId: id,
+        completedAt: order.delivery_completed_at,
+      });
+    }
+
     await order.save();
 
-    // Notify customer through WebSocket
-    SocketService.emitOrderUpdate(id, {
-      type: "status_update",
-      status,
-      orderId: id,
-    });
+    // Notify customer through WebSocket if online
+    const online = await isOnline();
+    if (online) {
+      SocketService.emitOrderUpdate(id, {
+        type: "status_update",
+        status,
+        orderId: id,
+      });
+    }
 
     res.status(200).json({
       message: `Order status updated to ${status}`,
@@ -98,11 +129,29 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
+// Update the updateLocation function with offline support
 const updateLocation = async (req, res) => {
   try {
     const { id } = req.params;
     const { latitude, longitude } = req.body;
     const driverId = req.user.id;
+
+    const locationData = {
+      orderId: id,
+      driverId,
+      latitude,
+      longitude,
+      timestamp: new Date(),
+    };
+
+    const online = await isOnline();
+    if (!online) {
+      addToQueue(locationData);
+      return res.status(200).json({
+        message: "Location queued for update",
+        isOffline: true,
+      });
+    }
 
     await Order.findOneAndUpdate(
       { _id: id, driver_id: driverId },
@@ -113,10 +162,40 @@ const updateLocation = async (req, res) => {
       },
     );
 
-    // Emit through WebSocket as backup
+    // Process any queued locations
+    await processQueue(async (location) => {
+      await Order.findOneAndUpdate(
+        { _id: location.orderId, driver_id: location.driverId },
+        {
+          "driver_location.latitude": location.latitude,
+          "driver_location.longitude": location.longitude,
+          "driver_location.updated_at": location.timestamp,
+        },
+      );
+    });
+
     SocketService.emitDriverLocation(id, { latitude, longitude });
 
-    res.status(200).json({ message: "Location updated" });
+    res.status(200).json({
+      message: "Location updated",
+      queueProcessed: true,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Add driver availability tracking
+const updateDriverAvailability = async (req, res) => {
+  try {
+    const { is_available } = req.body;
+    const driverId = req.user.id;
+
+    await User.findByIdAndUpdate(driverId, { is_available });
+
+    res.status(200).json({
+      message: `Driver availability updated to ${is_available}`,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -139,4 +218,5 @@ module.exports = {
   updateOrderStatus,
   updateLocation,
   getActiveDeliveries,
+  updateDriverAvailability,
 };
